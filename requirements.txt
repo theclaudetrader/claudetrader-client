@@ -1,0 +1,2 @@
+cryptography>=42
+alpaca-py>=0.33

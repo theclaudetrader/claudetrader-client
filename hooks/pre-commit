@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Generic secret-leak guard for contributors. Blocks committing credential files or
+# obvious API keys. (Safe to ship publicly — names nothing sensitive.)
+set -uo pipefail
+
+# 1) credential / key files
+if git diff --cached --name-only | grep -qiE '(^|/)\.env($|\.)|\.(key|pem)$|id_(rsa|ed25519)'; then
+  echo "pre-commit BLOCKED: a secret/key file is staged. It belongs in .gitignore." >&2
+  exit 1
+fi
+
+# 2) credential-looking strings in the added lines
+added="$(git diff --cached -U0 | grep -E '^\+' | grep -vE '^\+\+\+' || true)"
+if printf '%s' "$added" | grep -qE 'APCA_API_(KEY_ID|SECRET_KEY)[[:space:]]*=[[:space:]]*[A-Za-z0-9]{12,}'; then
+  echo "pre-commit BLOCKED: looks like a real Alpaca key/secret in the diff." >&2
+  exit 1
+fi
+if printf '%s' "$added" | grep -qE -- '-----BEGIN [A-Z ]*PRIVATE KEY-----'; then
+  echo "pre-commit BLOCKED: a private key is in the diff." >&2
+  exit 1
+fi
+exit 0
