@@ -18,3 +18,5 @@ venv/
 *.db
 results/
 *.log
+state.json
+KILL
