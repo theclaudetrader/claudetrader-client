@@ -20,6 +20,7 @@ class OrderIntent:
     notional: float    # dollar amount to trade
     target_weight: float
     reason: str
+    full_exit: bool = False   # SELL the ENTIRE position (use close_position, not notional)
 
     def as_dict(self) -> dict:
         return asdict(self)
@@ -46,7 +47,7 @@ def plan_orders(
             tgt = float(weights.get(tk, 0.0)) * equity
             if tk not in target_names and cur > min_order:
                 intents.append(OrderIntent(tk, "SELL", round(cur, 2), 0.0,
-                                           "not in target book"))
+                                           "not in target book", full_exit=True))
             elif cur - tgt > band:
                 intents.append(OrderIntent(tk, "SELL", round(cur - tgt, 2),
                                            weights.get(tk, 0.0),

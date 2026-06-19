@@ -29,23 +29,40 @@ class AlpacaExecutor:
         """{symbol: current_market_value}."""
         return {p.symbol: float(p.market_value) for p in self.client.get_all_positions()}
 
+    def open_order_symbols(self) -> set:
+        """Symbols that already have an OPEN (unfilled) order — skip them so a
+        repeated/scheduled run doesn't double-submit while orders are pending."""
+        from alpaca.trading.enums import QueryOrderStatus
+        from alpaca.trading.requests import GetOrdersRequest
+
+        try:
+            orders = self.client.get_orders(GetOrdersRequest(status=QueryOrderStatus.OPEN, limit=500))
+            return {o.symbol for o in orders}
+        except Exception:
+            return set()
+
     def execute(self, intent) -> dict:
-        """Place one market order for an OrderIntent. Returns a structured result."""
+        """Place one order for an OrderIntent. Full exits use close_position (sells
+        the exact held qty — avoids notional→share rounding overshoot); everything
+        else is a notional market order so it scales to fractional shares."""
         from alpaca.trading.enums import OrderSide, TimeInForce
         from alpaca.trading.requests import MarketOrderRequest
 
-        side = OrderSide.BUY if intent.side == "BUY" else OrderSide.SELL
-        req = MarketOrderRequest(
-            symbol=intent.ticker,
-            notional=round(float(intent.notional), 2),
-            side=side,
-            time_in_force=TimeInForce.DAY,
-        )
-        o = self.client.submit_order(req)
+        if intent.side == "SELL" and getattr(intent, "full_exit", False):
+            o = self.client.close_position(intent.ticker)  # liquidate entire position
+        else:
+            side = OrderSide.BUY if intent.side == "BUY" else OrderSide.SELL
+            o = self.client.submit_order(MarketOrderRequest(
+                symbol=intent.ticker,
+                notional=round(float(intent.notional), 2),
+                side=side,
+                time_in_force=TimeInForce.DAY,
+            ))
         return {
             "ticker": intent.ticker,
             "side": intent.side,
             "notional": round(float(intent.notional), 2),
+            "full_exit": bool(getattr(intent, "full_exit", False)),
             "order_id": str(getattr(o, "id", "")),
             "status": str(getattr(o, "status", "")),
         }

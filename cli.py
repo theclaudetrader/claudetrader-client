@@ -110,14 +110,20 @@ def main() -> int:
             for o, reason in blocked:
                 print(f"  ⛔ BLOCKED {o.side} {o.ticker} ${o.notional:,.2f}: {reason}")
         if not cfg.dry_run and broker and allowed:
+            # Dedup: skip names that already have an open (unfilled) order, so a
+            # repeated/scheduled run doesn't stack duplicate orders.
+            open_syms = broker.open_order_symbols()
             print("executing (LIVE)…")
             for o in allowed:
+                if o.ticker in open_syms:
+                    print(f"  ⏭  {o.side} {o.ticker}: skipped — open order already pending")
+                    continue
                 try:
                     res = broker.execute(o)
                     executed.append(res)
                     print(f"  ✓ {res['side']} {res['ticker']} ${res['notional']:,.2f} → {res['status']} ({res['order_id'][:8]})")
                 except Exception as e:
-                    print(f"  ✗ {o.side} {o.ticker} failed: {e}")
+                    print(f"  ✗ {o.side} {o.ticker} failed: {str(e)[:140]}")
     else:
         print("(no capital: set --capital, CT_CAPITAL, or broker keys to preview a plan)")
 
