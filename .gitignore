@@ -20,3 +20,4 @@ results/
 *.log
 state.json
 KILL
+dashboard.html
